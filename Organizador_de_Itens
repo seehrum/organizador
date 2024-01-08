@@ -1,0 +1,186 @@
+import tkinter as tk
+from tkinter import messagebox, simpledialog, Listbox
+import csv
+import os
+
+# Caminhos para os arquivos CSV
+ITENS_CSV = 'itens.csv'
+NOTAS_CSV = 'notas.csv'
+
+class GerenciadorDeDados:
+    def salvar_item(self, setor, tipo, objeto):
+        with open(ITENS_CSV, 'a', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow([setor, tipo, objeto])
+
+    def carregar_itens(self):
+        itens = []
+        if not os.path.exists(ITENS_CSV):
+            return itens
+        with open(ITENS_CSV, newline='', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                itens.append(row)
+        return itens
+
+    def remover_item(self, objeto):
+        itens = self.carregar_itens()
+        if not any(item[2] == objeto for item in itens):
+            return False
+        itens = [item for item in itens if item[2] != objeto]
+        with open(ITENS_CSV, 'w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerows(itens)
+        return True
+
+    def buscar_item(self, objeto):
+        itens = self.carregar_itens()
+        for item in itens:
+            if item[2] == objeto:
+                return item
+        return None
+
+    def salvar_nota(self, nota):
+        with open(NOTAS_CSV, 'a', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow([nota])
+
+    def carregar_notas(self):
+        notas = []
+        if not os.path.exists(NOTAS_CSV):
+            return notas
+        with open(NOTAS_CSV, newline='', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                notas.append(row[0])
+        return notas
+
+    def remover_nota(self, nota):
+        notas = self.carregar_notas()
+        if nota not in notas:
+            return False
+        notas = [n for n in notas if n != nota]
+        with open(NOTAS_CSV, 'w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            for n in notas:
+                writer.writerow([n])
+        return True
+
+    def atualizar_listas(self, lista_itens, lista_notas):
+        lista_itens.delete(0, tk.END)
+        lista_notas.delete(0, tk.END)
+        for item in self.carregar_itens():
+            lista_itens.insert(tk.END, f"{item[0]}, {item[1]}, {item[2]}")
+        for nota in self.carregar_notas():
+            lista_notas.insert(tk.END, nota)
+
+class Application(tk.Tk):
+    def __init__(self, gerenciador):
+        super().__init__()
+        self.gerenciador = gerenciador
+        self.title("Organizador de Itens")
+        self.geometry("377x610")  # Proporção áurea vertical
+        self.create_widgets()
+        self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
+
+    def create_widgets(self):
+        self.label_setor = tk.Label(self, text="Setor:")
+        self.label_setor.pack()
+
+        self.entry_setor = tk.Entry(self)
+        self.entry_setor.pack()
+
+        self.label_tipo = tk.Label(self, text="Tipo de Item:")
+        self.label_tipo.pack()
+
+        self.entry_tipo = tk.Entry(self)
+        self.entry_tipo.pack()
+
+        self.label_objeto = tk.Label(self, text="Objeto:")
+        self.label_objeto.pack()
+
+        self.entry_objeto = tk.Entry(self)
+        self.entry_objeto.pack()
+
+        self.btn_cadastrar = tk.Button(self, text="Cadastrar Item", command=self.cadastrar_item, width=20)
+        self.btn_cadastrar.pack()
+
+        self.btn_remover = tk.Button(self, text="Remover Item", command=self.remover_item, width=20)
+        self.btn_remover.pack()
+
+        self.btn_buscar = tk.Button(self, text="Buscar Item", command=self.buscar_item, width=20)
+        self.btn_buscar.pack()
+
+        self.btn_adicionar_nota = tk.Button(self, text="Adicionar Nota", command=self.adicionar_nota, width=20)
+        self.btn_adicionar_nota.pack()
+
+        self.btn_remover_nota = tk.Button(self, text="Remover Nota", command=self.remover_nota, width=20)
+        self.btn_remover_nota.pack()
+
+        self.label_lista_itens = tk.Label(self, text="Itens")
+        self.label_lista_itens.pack()
+
+        self.lista_itens = Listbox(self)
+        self.lista_itens.pack(fill=tk.BOTH, expand=True)
+
+        self.label_lista_notas = tk.Label(self, text="Notas")
+        self.label_lista_notas.pack()
+
+        self.lista_notas = Listbox(self)
+        self.lista_notas.pack(fill=tk.BOTH, expand=True)
+
+    def cadastrar_item(self):
+        setor = self.entry_setor.get()
+        tipo = self.entry_tipo.get()
+        objeto = self.entry_objeto.get()
+        if setor and tipo and objeto:
+            self.gerenciador.salvar_item(setor, tipo, objeto)
+            messagebox.showinfo("Sucesso", "Item cadastrado com sucesso!")
+            self.limpar_campos()
+            self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
+        else:
+            messagebox.showerror("Erro", "Preencha todos os campos!")
+
+    def limpar_campos(self):
+        self.entry_setor.delete(0, tk.END)
+        self.entry_tipo.delete(0, tk.END)
+        self.entry_objeto.delete(0, tk.END)
+
+    def remover_item(self):
+        objeto = simpledialog.askstring("Remover Item", "Digite o nome do objeto:")
+        if objeto and self.gerenciador.remover_item(objeto):
+            messagebox.showinfo("Sucesso", "Item removido com sucesso!")
+            self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
+        else:
+            messagebox.showerror("Erro", "Item não encontrado!")
+
+    def buscar_item(self):
+        objeto = simpledialog.askstring("Buscar Item", "Digite o nome do objeto:")
+        if objeto:
+            item = self.gerenciador.buscar_item(objeto)
+            if item:
+                messagebox.showinfo("Item Encontrado", f"Setor: {item[0]}, Tipo: {item[1]}, Objeto: {item[2]}")
+            else:
+                messagebox.showerror("Não Encontrado", "Item não encontrado!")
+
+    def adicionar_nota(self):
+        nota = simpledialog.askstring("Adicionar Nota", "Digite a nota:")
+        if nota:
+            self.gerenciador.salvar_nota(nota)
+            messagebox.showinfo("Sucesso", "Nota adicionada com sucesso!")
+            self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
+        else:
+            messagebox.showerror("Erro", "Erro ao adicionar nota.")
+
+    def remover_nota(self):
+        nota = simpledialog.askstring("Remover Nota", "Digite a nota a ser removida:")
+        if nota and self.gerenciador.remover_nota(nota):
+            messagebox.showinfo("Sucesso", "Nota removida com sucesso!")
+            self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
+        else:
+            messagebox.showerror("Erro", "Nota não encontrada!")
+
+if __name__ == "__main__":
+    gerenciador = GerenciadorDeDados()
+    app = Application(gerenciador)
+    app.mainloop()
