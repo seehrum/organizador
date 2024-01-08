@@ -8,80 +8,101 @@ ITENS_CSV = 'itens.csv'
 NOTAS_CSV = 'notas.csv'
 
 class GerenciadorDeDados:
+    def __init__(self):
+        self.itens = self.carregar_itens()
+        self.notas = self.carregar_notas()
+
     def salvar_item(self, setor, tipo, objeto):
-        with open(ITENS_CSV, 'a', newline='', encoding='utf-8') as file:
-            writer = csv.writer(file)
-            writer.writerow([setor, tipo, objeto])
+        self.itens.append([setor, tipo, objeto])
+        self.salvar_em_arquivo(ITENS_CSV, self.itens)
 
     def carregar_itens(self):
-        itens = []
-        if not os.path.exists(ITENS_CSV):
-            return itens
-        with open(ITENS_CSV, newline='', encoding='utf-8') as file:
-            reader = csv.reader(file)
-            for row in reader:
-                itens.append(row)
-        return itens
+        return self.carregar_de_arquivo(ITENS_CSV)
 
     def remover_item(self, objeto):
-        itens = self.carregar_itens()
-        if not any(item[2] == objeto for item in itens):
+        item_removido = [item for item in self.itens if item[2] == objeto]
+        if not item_removido:
             return False
-        itens = [item for item in itens if item[2] != objeto]
-        with open(ITENS_CSV, 'w', newline='', encoding='utf-8') as file:
-            writer = csv.writer(file)
-            writer.writerows(itens)
+        self.itens.remove(item_removido[0])
+        self.salvar_em_arquivo(ITENS_CSV, self.itens)
         return True
 
+    def editar_item(self, original_objeto, novo_setor, novo_tipo, novo_objeto):
+        for i, item in enumerate(self.itens):
+            if item[2] == original_objeto:
+                self.itens[i] = [novo_setor, novo_tipo, novo_objeto]
+                break
+        self.salvar_em_arquivo(ITENS_CSV, self.itens)
+
     def buscar_item(self, objeto):
-        itens = self.carregar_itens()
-        for item in itens:
+        for item in self.itens:
             if item[2] == objeto:
                 return item
         return None
 
     def salvar_nota(self, nota):
-        with open(NOTAS_CSV, 'a', newline='', encoding='utf-8') as file:
-            writer = csv.writer(file)
-            writer.writerow([nota])
+        self.notas.append(nota)
+        self.salvar_em_arquivo(NOTAS_CSV, [[n] for n in self.notas])
 
     def carregar_notas(self):
-        notas = []
-        if not os.path.exists(NOTAS_CSV):
-            return notas
-        with open(NOTAS_CSV, newline='', encoding='utf-8') as file:
-            reader = csv.reader(file)
-            for row in reader:
-                notas.append(row[0])
-        return notas
+        notas = self.carregar_de_arquivo(NOTAS_CSV)
+        return [nota[0] for nota in notas]
 
     def remover_nota(self, nota):
-        notas = self.carregar_notas()
-        if nota not in notas:
+        if nota not in self.notas:
             return False
-        notas = [n for n in notas if n != nota]
-        with open(NOTAS_CSV, 'w', newline='', encoding='utf-8') as file:
-            writer = csv.writer(file)
-            for n in notas:
-                writer.writerow([n])
+        self.notas.remove(nota)
+        self.salvar_em_arquivo(NOTAS_CSV, [[n] for n in self.notas])
         return True
+
+    def editar_nota(self, original_nota, nova_nota):
+        for i, nota in enumerate(self.notas):
+            if nota == original_nota:
+                self.notas[i] = nova_nota
+                break
+        self.salvar_em_arquivo(NOTAS_CSV, [[n] for n in self.notas])
 
     def atualizar_listas(self, lista_itens, lista_notas):
         lista_itens.delete(0, tk.END)
         lista_notas.delete(0, tk.END)
-        for item in self.carregar_itens():
+        for item in self.itens:
             lista_itens.insert(tk.END, f"{item[0]}, {item[1]}, {item[2]}")
-        for nota in self.carregar_notas():
+        for nota in self.notas:
             lista_notas.insert(tk.END, nota)
+
+    def salvar_em_arquivo(self, arquivo, dados):
+        try:
+            with open(arquivo, 'w', newline='', encoding='utf-8') as file:
+                writer = csv.writer(file)
+                writer.writerows(dados)
+        except IOError as e:
+            messagebox.showerror("Erro de Arquivo", f"Erro ao salvar no arquivo {arquivo}: {e}")
+
+    def carregar_de_arquivo(self, arquivo):
+        dados = []
+        if not os.path.exists(arquivo):
+            return dados
+        try:
+            with open(arquivo, newline='', encoding='utf-8') as file:
+                reader = csv.reader(file)
+                for row in reader:
+                    dados.append(row)
+        except IOError as e:
+            messagebox.showerror("Erro de Arquivo", f"Erro ao carregar o arquivo {arquivo}: {e}")
+        return dados
 
 class Application(tk.Tk):
     def __init__(self, gerenciador):
         super().__init__()
         self.gerenciador = gerenciador
         self.title("Organizador de Itens")
-        self.geometry("377x610")  # Proporção áurea vertical
+        self.geometry("377x610")
         self.create_widgets()
         self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
+        self.bind("<Escape>", self.fechar_programa)
+        self.bind("<F1>", self.editar_setor)
+        self.bind("<F2>", self.editar_tipo)
+        self.bind("<F3>", self.editar_objeto)
 
     def create_widgets(self):
         self.label_setor = tk.Label(self, text="Setor:")
@@ -122,12 +143,15 @@ class Application(tk.Tk):
 
         self.lista_itens = Listbox(self)
         self.lista_itens.pack(fill=tk.BOTH, expand=True)
+        self.lista_itens.bind("<Delete>", self.remover_item_selecionado)
 
         self.label_lista_notas = tk.Label(self, text="Notas")
         self.label_lista_notas.pack()
 
         self.lista_notas = Listbox(self)
         self.lista_notas.pack(fill=tk.BOTH, expand=True)
+        self.lista_notas.bind("<Delete>", self.remover_nota_selecionada)
+        self.lista_notas.bind("<F1>", self.editar_nota_selecionada)
 
     def cadastrar_item(self):
         setor = self.entry_setor.get()
@@ -179,6 +203,75 @@ class Application(tk.Tk):
             self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
         else:
             messagebox.showerror("Erro", "Nota não encontrada!")
+
+    def remover_item_selecionado(self, event):
+        try:
+            selecionado = self.lista_itens.get(self.lista_itens.curselection())
+            if selecionado:
+                objeto = selecionado.split(', ')[2]
+                self.gerenciador.remover_item(objeto)
+                self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
+        except tk.TclError:
+            pass
+
+    def remover_nota_selecionada(self, event):
+        try:
+            selecionada = self.lista_notas.get(self.lista_notas.curselection())
+            if selecionada:
+                self.gerenciador.remover_nota(selecionada)
+                self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
+        except tk.TclError:
+            pass
+
+    def editar_nota_selecionada(self, event):
+        try:
+            selecionada = self.lista_notas.get(self.lista_notas.curselection())
+            if selecionada:
+                nova_nota = simpledialog.askstring("Editar Nota", "Edite a nota:", initialvalue=selecionada)
+                if nova_nota:
+                    self.gerenciador.editar_nota(selecionada, nova_nota)
+                    self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
+        except tk.TclError:
+            pass
+
+    def editar_setor(self, event):
+        try:
+            selecionado = self.lista_itens.get(self.lista_itens.curselection())
+            if selecionado:
+                setor, tipo, objeto = selecionado.split(', ')
+                novo_setor = simpledialog.askstring("Editar Setor", "Digite o novo setor:", initialvalue=setor)
+                if novo_setor:
+                    self.gerenciador.editar_item(objeto, novo_setor, tipo, objeto)
+                    self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
+        except tk.TclError:
+            pass
+
+    def editar_tipo(self, event):
+        try:
+            selecionado = self.lista_itens.get(self.lista_itens.curselection())
+            if selecionado:
+                setor, tipo, objeto = selecionado.split(', ')
+                novo_tipo = simpledialog.askstring("Editar Tipo", "Digite o novo tipo:", initialvalue=tipo)
+                if novo_tipo:
+                    self.gerenciador.editar_item(objeto, setor, novo_tipo, objeto)
+                    self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
+        except tk.TclError:
+            pass
+
+    def editar_objeto(self, event):
+        try:
+            selecionado = self.lista_itens.get(self.lista_itens.curselection())
+            if selecionado:
+                setor, tipo, objeto = selecionado.split(', ')
+                novo_objeto = simpledialog.askstring("Editar Objeto", "Digite o novo nome do objeto:", initialvalue=objeto)
+                if novo_objeto:
+                    self.gerenciador.editar_item(objeto, setor, tipo, novo_objeto)
+                    self.gerenciador.atualizar_listas(self.lista_itens, self.lista_notas)
+        except tk.TclError:
+            pass
+
+    def fechar_programa(self, event):
+        self.destroy()
 
 if __name__ == "__main__":
     gerenciador = GerenciadorDeDados()
